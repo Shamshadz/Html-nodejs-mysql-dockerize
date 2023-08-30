@@ -22,20 +22,55 @@ database.connect((err) => {
     console.log('Connected to MySQL database');
 });
 
+// Add this middleware to parse JSON data
+// app.use(express.json()); // use for api or backend to parse json data
+app.use(express.static(__dirname + '/'));
+
 app.get('/init', (req, res) => {
-    const sqlQuery = 'CREATE TABLE IF NOT EXISTS emails(id int AUTO_INCREMENT, firstname VARCHAR(50), lastname VARCHAR(50), email VARCHAR(50), PRIMARY KEY(id))';
+    const createTableQueries = [
+        'CREATE TABLE IF NOT EXISTS students (stud_no INT PRIMARY KEY, name VARCHAR(50));',
+        'CREATE TABLE IF NOT EXISTS student_state (stud_no INT PRIMARY KEY, state VARCHAR(50));',
+        'CREATE TABLE IF NOT EXISTS state_country (state VARCHAR(50), country VARCHAR(50));',
+        'CREATE TABLE IF NOT EXISTS student_age (stud_no INT PRIMARY KEY, age INT);'
+    ];
 
-    database.query(sqlQuery, (err) => {
-        if (err) throw err;
-
-        res.send('Table created!')
+    const createTablePromises = createTableQueries.map(query => {
+        return new Promise((resolve, reject) => {
+            database.query(query, (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
     });
+
+    Promise.all(createTablePromises)
+        .then(() => {
+            res.send('Tables created successfully!');
+        })
+        .catch(err => {
+            res.status(500).send('Error creating tables: ' + err.message);
+        });
 });
 
-app.post('/subscribe',
-    body('email').isEmail().normalizeEmail(),
-    body('firstname').not().isEmpty().escape(),
-    body('lastname').not().isEmpty().escape(),
+
+app.get('/form',
+    function (req, res) {
+        res.sendFile(__dirname + "/form.html")
+    }
+)
+
+const bodyParser = require("body-parser");
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+app.post('/submit-form',
+    body('name').not().isEmpty().escape(),
+    body('state').not().isEmpty().escape(), // Add state field validation
+    body('country').not().isEmpty().escape(), // Add country field validation
+    body('age').isInt().toInt(), // Add age field validation and convert to integer
     (req, res) => {
         const errors = validationResult(req);
         console.log(req.body);
@@ -43,32 +78,77 @@ app.post('/subscribe',
         if (errors.array().length > 0) {
             res.send(errors.array());
         } else {
-            const subscriber = {
-                firstname: req.body.firstname,
-                lastname: req.body.lastname,
-                email: req.body.email
+
+            const student = {
+                stud_no: req.body.stud_no,
+                name: req.body.name
             };
 
-            const sqlQuery = 'INSERT INTO emails SET ?';
+            const studentState = {
+                stud_no: req.body.stud_no,
+                state: req.body.state
+            };
 
-            database.query(sqlQuery, subscriber, (err, row) => {
-                if (err) throw err;
+            const stateCountry = {
+                state: req.body.state,
+                country: req.body.country
+            };
 
-                res.send('Subscribed successfully!');
+            const studentAge = {
+                stud_no: req.body.stud_no,
+                age: req.body.age
+            };
+
+            // Assuming you have created the tables previously
+            const queries = [
+                'INSERT INTO students SET ?',
+                'INSERT INTO student_state SET ?',
+                'INSERT INTO state_country SET ?',
+                'INSERT INTO student_age SET ?',
+            ];
+
+            const values = [student, studentState, stateCountry, studentAge];
+
+            const insertPromises = queries.map((query, index) => {
+                return new Promise((resolve, reject) => {
+                    database.query(query, values[index], (err) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve();
+                        }
+                    });
+                });
             });
+
+            Promise.all(insertPromises)
+                .then(() => {
+                    res.send('Data inserted successfully!');
+                })
+                .catch(err => {
+                    res.status(500).send('Error inserting data: ' + err.message);
+                });
         }
     });
 
 
 app.get('/', (req, res) => {
-    const sqlQuery = 'SELECT * FROM emails';
+    const sqlQuery = `
+            SELECT s.name, ss.state, sc.country, sa.age
+            FROM students s
+            JOIN student_state ss ON s.stud_no = ss.stud_no
+            JOIN state_country sc ON ss.state = sc.state
+            JOIN student_age sa ON s.stud_no = sa.stud_no;
+        `;
 
     database.query(sqlQuery, (err, result) => {
         if (err) throw err;
 
-        res.json({ 'emails': result });
+        res.json({ 'studentsData': result });
     });
 });
+
+
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

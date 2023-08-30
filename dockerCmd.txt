@@ -1,0 +1,6 @@
+sudo apt update
+sudo apt install docker.io
+sudo docker login
+docker run -p 3306:3306 --name my-mysql-container -e MYSQL_ROOT_PASSWORD=pass -e MYSQL_DATABASE=emails_db -d mysql:latest
+docker container exec -it my-mysql-container bash
+mysql -u root -p

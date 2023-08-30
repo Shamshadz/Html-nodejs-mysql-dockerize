@@ -2,6 +2,8 @@ const express = require('express');
 const mysql = require('mysql');
 const { body, validationResult } = require('express-validator');
 const app = express();
+const PORT = process.env.PORT || 3000; // Default to port 3000 if PORT is not provided in the environment variables
+
 
 require('dotenv').config();
 
@@ -46,3 +48,7 @@ app.post('/subscribe',
             });
         }
     });
+
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
